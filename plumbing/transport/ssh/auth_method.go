@@ -107,8 +107,9 @@ func (a *PasswordCallback) ClientConfig() (*ssh.ClientConfig, error) {
 
 // PublicKeys implements AuthMethod by using the given key pairs.
 type PublicKeys struct {
-	User   string
-	Signer ssh.Signer
+	User            string
+	Signer          ssh.Signer
+	HostKeyCallback ssh.HostKeyCallback
 }
 
 // NewPublicKeys returns a PublicKeys from a PEM encoded private key. An
@@ -124,6 +125,17 @@ func NewPublicKeys(user string, pemBytes []byte, password string) (*PublicKeys, 
 		return nil, err
 	}
 	return &PublicKeys{User: user, Signer: signer}, nil
+}
+
+func NewPublicKeysWithHostKeyCallback(user string, pemBytes []byte, password string, hostKeyCallback ssh.HostKeyCallback) (*PublicKeys, error) {
+	signer, err := ssh.ParsePrivateKey(pemBytes)
+	if _, ok := err.(*ssh.PassphraseMissingError); ok {
+		signer, err = ssh.ParsePrivateKeyWithPassphrase(pemBytes, []byte(password))
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &PublicKeys{User: user, Signer: signer, HostKeyCallback: hostKeyCallback}, nil
 }
 
 // NewPublicKeysFromFile returns a PublicKeys from a file containing a PEM
@@ -148,8 +160,9 @@ func (a *PublicKeys) String() string {
 
 func (a *PublicKeys) ClientConfig() (*ssh.ClientConfig, error) {
 	return &ssh.ClientConfig{
-		User: a.User,
-		Auth: []ssh.AuthMethod{ssh.PublicKeys(a.Signer)},
+		User:            a.User,
+		Auth:            []ssh.AuthMethod{ssh.PublicKeys(a.Signer)},
+		HostKeyCallback: a.HostKeyCallback,
 	}, nil
 }
 
